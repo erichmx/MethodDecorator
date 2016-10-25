@@ -98,6 +98,7 @@
     <Compile Include="WhenDecoratingPropertyMethods.cs" />
     <Compile Include="WhenDecoratingByExternalInterceptor.cs" />
     <Compile Include="WhenDecoratingVoidMethod.cs" />
+    <Compile Include="WhenInterceptingByGenericType.cs" />
     <Compile Include="WhenInterceptingByType.cs" />
     <Compile Include="WhenInterceptingNestedTypes.cs" />
     <Compile Include="Helpers\XmlExtensions.cs" />

@@ -14,4 +14,5 @@ using SimpleTest.Attributes.SimpleTest;
 [module: ExternalInterceptor]
 [assembly: ExternalInterceptionAssemblyLevel]
 
-[module: InterceptorByType(Types = new Type[] { typeof(TargetByType) }, ApplyToInheritedTypes = true, OnlyDecoratePublicMethods = true)]
+[module: InterceptorByType(Types = new Type[] { typeof(TargetByGenericType<>), typeof(TargetByType) }, 
+    ApplyToInheritedTypes = true, OnlyDecoratePublicMethods = true)]

@@ -70,6 +70,8 @@
     <Compile Include="InterceptingMethodsWithReturnValues.cs" />
     <Compile Include="InterceptingVoidMethods.cs" />
     <Compile Include="Attributes\InterceptorAttribute.cs" />
+    <Compile Include="TargetByGenericType.cs" />
+    <Compile Include="TargetByGenericTypeInherited.cs" />
     <Compile Include="TargetByType.cs" />
     <Compile Include="TargetByTypeInherited.cs" />
     <Compile Include="TestRecords.cs" />
