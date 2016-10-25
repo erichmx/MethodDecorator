@@ -2,7 +2,7 @@
 
 ## The nuget package  [![NuGet Status](http://img.shields.io/nuget/v/MethodDecorator.Fody.svg?style=flat)](https://www.nuget.org/packages/MethodDecorator.Fody/)
 
-https://nuget.org/packages/MethodDecorator.Fody/
+https://nuget.org/packages/MethodDecorator.Fody/ (this is the original project's package)
 
     PM> Install-Package MethodDecorator.Fody
 
