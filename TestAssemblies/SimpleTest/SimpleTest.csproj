@@ -46,6 +46,7 @@
     <Compile Include="AsyncClass.cs" />
     <Compile Include="Attributes\DerivedDecoratorAttribute.cs" />
     <Compile Include="Attributes\DerivedFromInterfaceDecoratorAttribute.cs" />
+    <Compile Include="Attributes\InterceptorByTypeAttribute.cs" />
     <Compile Include="Attributes\IntersectMethodsMarkedByAttribute.cs" />
     <Compile Include="Attributes\InterceptorDerivedFromAbstractBaseClassAttribute.cs" />
     <Compile Include="MarkedFromTheDerivedDecorator.cs" />
@@ -69,6 +70,8 @@
     <Compile Include="InterceptingMethodsWithReturnValues.cs" />
     <Compile Include="InterceptingVoidMethods.cs" />
     <Compile Include="Attributes\InterceptorAttribute.cs" />
+    <Compile Include="TargetByType.cs" />
+    <Compile Include="TargetByTypeInherited.cs" />
     <Compile Include="TestRecords.cs" />
   </ItemGroup>
   <ItemGroup>

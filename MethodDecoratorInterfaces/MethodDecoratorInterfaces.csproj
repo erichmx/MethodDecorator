@@ -41,9 +41,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IMethodDecorator.cs" />
+    <Compile Include="IMethodDecoratorByType.cs" />
     <Compile Include="MethodDecoratorAttributeBase.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="MethodDecoratorByTypeAttribute.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

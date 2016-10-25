@@ -1,10 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 using MethodDecorator.Fody;
-
+using MethodDecoratorInterfaces;
 using Mono.Cecil;
 
 public class ModuleWeaver {
@@ -25,8 +26,9 @@ public class ModuleWeaver {
 
         this.DecorateDirectlyAttributed(decorator);
         this.DecorateAttributedByImplication(decorator);
+        this.DecorateByType(decorator);
 
-        if(this.ModuleDefinition.AssemblyReferences.Count(r => r.Name == "mscorlib") > 1) {
+        if (this.ModuleDefinition.AssemblyReferences.Count(r => r.Name == "mscorlib") > 1) {
             throw new Exception(
                 String.Format(
                     "Error occured during IL weaving. The new assembly is now referencing more than one version of mscorlib: {0}",
@@ -36,21 +38,103 @@ public class ModuleWeaver {
         }
     }
 
-    private void DecorateAttributedByImplication(MethodDecorator.Fody.MethodDecorator decorator) {
+    private void DecorateAttributedByImplication(MethodDecorator.Fody.MethodDecorator decorator)
+    {
         var inderectAttributes = this.ModuleDefinition.CustomAttributes
                                      .Concat(this.ModuleDefinition.Assembly.CustomAttributes)
                                      .Where(x => x.AttributeType.Name.StartsWith("IntersectMethodsMarkedByAttribute"))
                                      .Select(ToHostAttributeMapping)
-                                     .Where(x=>x!=null)
+                                     .Where(x => x != null)
                                      .ToArray();
 
-        foreach (var inderectAttribute in inderectAttributes) {
+        foreach (var inderectAttribute in inderectAttributes)
+        {
             var methods = this.FindAttributedMethods(inderectAttribute.AttribyteTypes);
             foreach (var x in methods)
                 decorator.Decorate(x.TypeDefinition, x.MethodDefinition, inderectAttribute.HostAttribute);
         }
     }
 
+    private void DecorateByType(MethodDecorator.Fody.MethodDecorator decorator)
+    {
+        var byTypeAttributes = this.ModuleDefinition.CustomAttributes
+                                     .Concat(this.ModuleDefinition.Assembly.CustomAttributes)
+                                     .Where(x => ImplementsInterface(x.AttributeType, typeof(IMethodDecoratorByType)))
+                                     .Distinct()
+                                     .Cast<CustomAttribute>()
+                                     .ToArray();
+
+        foreach (var attribute in byTypeAttributes)
+        {
+            var types = new List<TypeDefinition>();
+            var typesArgument = attribute.Properties.FirstOrDefault(arg => arg.Name == "Types").Argument;
+            if(typesArgument.Type != null)
+                types = ((CustomAttributeArgument[])typesArgument.Value).Select(v => v.Value).Cast<TypeDefinition>().ToList();
+
+            var applyToInheritedTypes = true;
+            var applyToInheritedArgument = attribute.Properties.FirstOrDefault(arg => arg.Name == "ApplyToInheritedTypes").Argument;
+            if (applyToInheritedArgument.Type != null)
+                applyToInheritedTypes = (bool)applyToInheritedArgument.Value;
+
+            var onlyPublicMethods = true;
+            var onlyPublicArgument = attribute.Properties.FirstOrDefault(arg => arg.Name == "OnlyDecoratePublicMethods").Argument;
+            if (onlyPublicArgument.Type != null)
+                onlyPublicMethods = (bool)onlyPublicArgument.Value;
+
+            var methods = this.FindMethodsByType(types, onlyPublicMethods, applyToInheritedTypes);
+            foreach (var x in methods)
+                decorator.Decorate(x.TypeDefinition, x.MethodDefinition, attribute);
+
+        }
+    }
+
+
+    private bool ImplementsInterface(TypeReference typeReference, Type interfaceType)
+    {
+        if (typeReference.IsValueType) return false;
+
+        //Type type = Type.GetType(typeReference.FullName + ", " + typeReference.Module.Assembly.FullName);
+        //return interfaceType.IsAssignableFrom(type);
+
+        var typeDefinition = typeReference.Resolve();
+        if (typeDefinition.BaseType == null)
+            return false;
+
+        return typeDefinition.Interfaces.Any(i => i.FullName.Equals(interfaceType.FullName))
+               || ImplementsInterface(typeDefinition.BaseType, interfaceType);
+    }
+
+    private bool IsSubType(TypeReference typeReference, TypeDefinition targetTypeDefinition)
+    {
+        if (typeReference.IsValueType) return false;
+
+        //Type type = Type.GetType(typeReference.FullName + ", " + typeReference.Module.Assembly.FullName);
+        //Type targetType = Type.GetType(targetTypeDefinition.FullName + ", " + targetTypeDefinition.Module.Assembly.FullName);
+        //return type.IsSubclassOf(targetType);
+
+        var typeDefinition = typeReference.Resolve();
+        if (typeDefinition.BaseType == null)
+            return false;
+
+        return typeDefinition.FullName.Equals(targetTypeDefinition.FullName)
+               || IsSubType(typeDefinition.BaseType, targetTypeDefinition);
+    }
+
+
+    private IEnumerable<AttributeMethodInfo> FindMethodsByType(IList<TypeDefinition> targetTypeDefintions, bool onlyPublic, bool includeInherited)
+    {
+        return from topLevelType in this.ModuleDefinition.Types
+               from type in GetAllTypes(topLevelType)
+               where targetTypeDefintions.Contains(type) ||
+                    (includeInherited && targetTypeDefintions.Any(target => IsSubType(type, target)))
+               from method in type.Methods
+               where method.HasBody && !method.IsConstructor && (!onlyPublic || method.IsPublic)
+               select new AttributeMethodInfo
+               {
+                   TypeDefinition = type,
+                   MethodDefinition = method
+               };
+    }
     private HostAttributeMapping ToHostAttributeMapping(CustomAttribute arg) {
         var prms = arg.ConstructorArguments.First().Value as CustomAttributeArgument[];
         if (null == prms)
