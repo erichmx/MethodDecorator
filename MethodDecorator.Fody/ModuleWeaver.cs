@@ -1,12 +1,11 @@
-﻿using System;
+﻿using MethodDecorator.Fody;
+using MethodDecoratorInterfaces;
+using Mono.Cecil;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
-using MethodDecorator.Fody;
-using MethodDecoratorInterfaces;
-using Mono.Cecil;
 
 public class ModuleWeaver {
     public ModuleDefinition ModuleDefinition { get; set; }
@@ -14,7 +13,6 @@ public class ModuleWeaver {
     public Action<string> LogInfo { get; set; }
     public Action<string> LogWarning { get; set; }
     public Action<string> LogError { get; set; }
-
 
     public void Execute() {
         this.LogInfo = s => { };
@@ -38,8 +36,7 @@ public class ModuleWeaver {
         }
     }
 
-    private void DecorateAttributedByImplication(MethodDecorator.Fody.MethodDecorator decorator)
-    {
+    private void DecorateAttributedByImplication(MethodDecorator.Fody.MethodDecorator decorator) {
         var inderectAttributes = this.ModuleDefinition.CustomAttributes
                                      .Concat(this.ModuleDefinition.Assembly.CustomAttributes)
                                      .Where(x => x.AttributeType.Name.StartsWith("IntersectMethodsMarkedByAttribute"))
@@ -47,28 +44,25 @@ public class ModuleWeaver {
                                      .Where(x => x != null)
                                      .ToArray();
 
-        foreach (var inderectAttribute in inderectAttributes)
-        {
+        foreach (var inderectAttribute in inderectAttributes) {
             var methods = this.FindAttributedMethods(inderectAttribute.AttribyteTypes);
             foreach (var x in methods)
                 decorator.Decorate(x.TypeDefinition, x.MethodDefinition, inderectAttribute.HostAttribute);
         }
     }
 
-    private void DecorateByType(MethodDecorator.Fody.MethodDecorator decorator)
-    {
+    private void DecorateByType(MethodDecorator.Fody.MethodDecorator decorator) {
         var byTypeAttributes = this.ModuleDefinition.CustomAttributes
                                      .Concat(this.ModuleDefinition.Assembly.CustomAttributes)
-                                     .Where(x => ImplementsInterface(x.AttributeType, typeof(IMethodDecoratorByType)))
+                                     .Where(x => x.AttributeType.Resolve().Implements(typeof(IMethodDecoratorByType)))
                                      .Distinct()
                                      .Cast<CustomAttribute>()
                                      .ToArray();
 
-        foreach (var attribute in byTypeAttributes)
-        {
+        foreach (var attribute in byTypeAttributes) {
             var types = new List<TypeDefinition>();
             var typesArgument = attribute.Properties.FirstOrDefault(arg => arg.Name == "Types").Argument;
-            if(typesArgument.Type != null)
+            if (typesArgument.Type != null)
                 types = ((CustomAttributeArgument[])typesArgument.Value).Select(v => v.Value).Cast<TypeDefinition>().ToList();
 
             var applyToInheritedTypes = true;
@@ -81,52 +75,19 @@ public class ModuleWeaver {
             if (onlyPublicArgument.Type != null)
                 onlyPublicMethods = (bool)onlyPublicArgument.Value;
 
-            var methods = this.FindMethodsByType(types, onlyPublicMethods, applyToInheritedTypes);
-            foreach (var x in methods)
-                decorator.Decorate(x.TypeDefinition, x.MethodDefinition, attribute);
-
+            if (types.Count > 0) {
+                var methods = this.FindMethodsByType(types, onlyPublicMethods, applyToInheritedTypes);
+                foreach (var x in methods)
+                    decorator.Decorate(x.TypeDefinition, x.MethodDefinition, attribute);
+            }
         }
     }
 
-
-    private bool ImplementsInterface(TypeReference typeReference, Type interfaceType)
-    {
-        if (typeReference.IsValueType) return false;
-
-        //Type type = Type.GetType(typeReference.FullName + ", " + typeReference.Module.Assembly.FullName);
-        //return interfaceType.IsAssignableFrom(type);
-
-        var typeDefinition = typeReference.Resolve();
-        if (typeDefinition.BaseType == null)
-            return false;
-
-        return typeDefinition.Interfaces.Any(i => i.FullName.Equals(interfaceType.FullName))
-               || ImplementsInterface(typeDefinition.BaseType, interfaceType);
-    }
-
-    private bool IsSubType(TypeReference typeReference, TypeDefinition targetTypeDefinition)
-    {
-        if (typeReference.IsValueType) return false;
-
-        //Type type = Type.GetType(typeReference.FullName + ", " + typeReference.Module.Assembly.FullName);
-        //Type targetType = Type.GetType(targetTypeDefinition.FullName + ", " + targetTypeDefinition.Module.Assembly.FullName);
-        //return type.IsSubclassOf(targetType);
-
-        var typeDefinition = typeReference.Resolve();
-        if (typeDefinition.BaseType == null)
-            return false;
-
-        return typeDefinition.FullName.Equals(targetTypeDefinition.FullName)
-               || IsSubType(typeDefinition.BaseType, targetTypeDefinition);
-    }
-
-
-    private IEnumerable<AttributeMethodInfo> FindMethodsByType(IList<TypeDefinition> targetTypeDefintions, bool onlyPublic, bool includeInherited)
-    {
+    private IEnumerable<AttributeMethodInfo> FindMethodsByType(IList<TypeDefinition> targetTypeDefintions, bool onlyPublic, bool includeInherited) {
         return from topLevelType in this.ModuleDefinition.Types
                from type in GetAllTypes(topLevelType)
                where targetTypeDefintions.Contains(type) ||
-                    (includeInherited && targetTypeDefintions.Any(target => IsSubType(type, target)))
+                    (includeInherited && targetTypeDefintions.Any(target => type.DerivesFrom(target)))
                from method in type.Methods
                where method.HasBody && !method.IsConstructor && (!onlyPublic || method.IsPublic)
                select new AttributeMethodInfo
@@ -135,11 +96,13 @@ public class ModuleWeaver {
                    MethodDefinition = method
                };
     }
+
     private HostAttributeMapping ToHostAttributeMapping(CustomAttribute arg) {
         var prms = arg.ConstructorArguments.First().Value as CustomAttributeArgument[];
         if (null == prms)
             return null;
-        return new HostAttributeMapping {
+        return new HostAttributeMapping
+        {
             HostAttribute = arg,
             AttribyteTypes = prms.Select(c => ((TypeReference)c.Value).Resolve()).ToArray()
         };
@@ -152,7 +115,6 @@ public class ModuleWeaver {
         foreach (var x in methods)
             decorator.Decorate(x.TypeDefinition, x.MethodDefinition, x.CustomAttribute);
     }
-
 
     private IEnumerable<TypeDefinition> FindMarkerTypes() {
         var allAttributes = this.GetAttributes();
@@ -171,7 +133,6 @@ public class ModuleWeaver {
     }
 
     private IEnumerable<TypeDefinition> GetAttributes() {
-        
         var res = new List<TypeDefinition>();
 
         res.AddRange(this.ModuleDefinition.CustomAttributes.Select(c => c.AttributeType.Resolve()));
@@ -183,7 +144,6 @@ public class ModuleWeaver {
 
             //make using of MethodDecoratorEx assembly optional because it can break exists code
             if (null != methodDecorator) {
-                
                 res.AddRange(this.ModuleDefinition.Types.Where(c => c.Implements(methodDecorator)));
             }
         }
@@ -228,7 +188,8 @@ public class ModuleWeaver {
                where attributeTypeDef.Implements(markerTypeDefinition) ||
                      attributeTypeDef.DerivesFrom(markerTypeDefinition) ||
                      this.AreEquals(attributeTypeDef, markerTypeDefinition)
-               select new AttributeMethodInfo {
+               select new AttributeMethodInfo
+               {
                    CustomAttribute = attribute,
                    TypeDefinition = type,
                    MethodDefinition = method

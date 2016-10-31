@@ -1,9 +1,9 @@
+using Mono.Cecil;
 using System;
 using System.Linq;
 
-using Mono.Cecil;
-
 namespace MethodDecorator.Fody {
+
     public static class TypeReferenceExtensions {
 
         public static bool Implements(this TypeDefinition typeDefinition, System.Type type) {
@@ -18,8 +18,23 @@ namespace MethodDecorator.Fody {
         }
 
         public static bool Implements(this TypeDefinition typeDefinition, TypeReference interfaceTypeReference) {
+            TypeDefinition interfaceTypeDefinition;
+            try {
+                interfaceTypeDefinition = interfaceTypeReference.Resolve();
+            }
+            catch (Exception) {
+                return false;
+            }
+            return Implements(typeDefinition, interfaceTypeDefinition);
+        }
+
+        public static bool Implements(this TypeDefinition typeDefinition, TypeDefinition interfaceTypeDefinition) {
             while (typeDefinition != null && typeDefinition.BaseType != null) {
-                if (typeDefinition.Interfaces != null && typeDefinition.Interfaces.Any(i => i.FullName == interfaceTypeReference.FullName))
+                if (typeDefinition.Interfaces != null && typeDefinition.Interfaces
+                        .Any(i => (i.FullName == interfaceTypeDefinition.FullName)
+                            && typeDefinition.GenericParameters.Count == interfaceTypeDefinition.GenericParameters.Count
+                            && typeDefinition.GenericParameters.Intersect(interfaceTypeDefinition.GenericParameters).Count() == typeDefinition.GenericParameters.Count)
+                    )
                     return true;
 
                 typeDefinition = typeDefinition.BaseType.Resolve();
@@ -29,11 +44,17 @@ namespace MethodDecorator.Fody {
         }
 
         public static bool DerivesFrom(this TypeReference typeReference, TypeReference expectedBaseTypeReference) {
-            while (typeReference != null) {
-                if (typeReference.FullName == expectedBaseTypeReference.FullName)
+            return DerivesFrom(typeReference.Resolve(), expectedBaseTypeReference.Resolve());
+        }
+
+        public static bool DerivesFrom(this TypeDefinition typeDefinition, TypeDefinition expectedBaseTypeDefinition) {
+            while (typeDefinition != null) {
+                if (typeDefinition.FullName.Equals(expectedBaseTypeDefinition.FullName)
+                && typeDefinition.GenericParameters.Count == expectedBaseTypeDefinition.GenericParameters.Count
+                && typeDefinition.GenericParameters.Intersect(expectedBaseTypeDefinition.GenericParameters).Count() == typeDefinition.GenericParameters.Count)
                     return true;
 
-                typeReference = typeReference.Resolve().BaseType;
+                typeDefinition = typeDefinition.Resolve().BaseType?.Resolve();
             }
 
             return false;
